@@ -8,3 +8,4 @@ plotly>=5.15.0
 asyncio>=3.4.3
 Deprecated>=1.2.14
 python-docx
+fpdf2
