@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 import json
 import io
 from docx import Document
-
+from fpdf import FPDF
 import logging
 from pydantic import BaseModel, Field
 import csv
@@ -618,6 +618,100 @@ def generate_docx_report(results) -> io.BytesIO:
     buffer.seek(0)
     return buffer
 
+def generate_pdf_report(results) -> io.BytesIO:
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, 'FinGuide Financial Analysis Report', 0, 1, 'C')
+    pdf.ln(5)
+    
+    pdf.set_font("Arial", 'B', 14)
+    # 1. Budget Analysis
+    if "budget_analysis" in results and results["budget_analysis"]:
+        ba = results["budget_analysis"]
+        if not isinstance(ba, str):
+            pdf.cell(0, 10, 'Budget Analysis', 0, 1)
+            pdf.set_font("Arial", '', 12)
+            if "total_expenses" in ba:
+                pdf.cell(0, 8, f"Total Expenses: Rs. {ba['total_expenses']:,}", 0, 1)
+            if "insights" in ba:
+                pdf.set_font("Arial", 'B', 12)
+                pdf.cell(0, 8, 'Insights:', 0, 1)
+                pdf.set_font("Arial", '', 12)
+                for insight in ba["insights"]:
+                    pdf.multi_cell(0, 8, f"- {insight}")
+            pdf.ln(5)
+
+    # 2. Savings Strategy
+    pdf.set_font("Arial", 'B', 14)
+    if "savings_strategy" in results and results["savings_strategy"]:
+        ss = results["savings_strategy"]
+        if not isinstance(ss, str):
+            pdf.cell(0, 10, 'Savings Strategy', 0, 1)
+            pdf.set_font("Arial", '', 12)
+            if "emergency_fund_target" in ss:
+                pdf.cell(0, 8, f"Emergency Fund Target: Rs. {ss['emergency_fund_target']:,}", 0, 1)
+            if "savings_rate" in ss:
+                pdf.cell(0, 8, f"Recommended Savings Rate: {ss['savings_rate']}%", 0, 1)
+            if "recommendations" in ss:
+                pdf.set_font("Arial", 'B', 12)
+                pdf.cell(0, 8, 'Recommendations:', 0, 1)
+                pdf.set_font("Arial", '', 12)
+                for rec in ss["recommendations"]:
+                    pdf.multi_cell(0, 8, f"- {rec}")
+            pdf.ln(5)
+            
+    # 3. Debt Reduction
+    pdf.set_font("Arial", 'B', 14)
+    if "debt_reduction" in results and results["debt_reduction"]:
+        dr = results["debt_reduction"]
+        if not isinstance(dr, str):
+            pdf.cell(0, 10, 'Debt Reduction Plan', 0, 1)
+            pdf.set_font("Arial", '', 12)
+            if "total_debt" in dr:
+                pdf.cell(0, 8, f"Total Debt: Rs. {dr['total_debt']:,}", 0, 1)
+            if "recommendations" in dr:
+                pdf.set_font("Arial", 'B', 12)
+                pdf.cell(0, 8, 'Recommendations:', 0, 1)
+                pdf.set_font("Arial", '', 12)
+                for rec in dr["recommendations"]:
+                    # Handle encoding for PDF if needed by filtering or just print
+                    title = rec.get('title', '').encode('latin-1', 'replace').decode('latin-1')
+                    desc = rec.get('description', '').encode('latin-1', 'replace').decode('latin-1')
+                    pdf.multi_cell(0, 8, f"- {title}: {desc}")
+            pdf.ln(5)
+
+    # 4. Investment Strategy
+    pdf.set_font("Arial", 'B', 14)
+    if "investment_strategy" in results and results["investment_strategy"]:
+        iv = results["investment_strategy"]
+        if not isinstance(iv, str):
+            pdf.cell(0, 10, 'Investment Strategy (India)', 0, 1)
+            pdf.set_font("Arial", '', 12)
+            if "risk_profile" in iv:
+                pdf.cell(0, 8, f"Risk Profile: {iv['risk_profile']}", 0, 1)
+            if "monthly_surplus_allocation" in iv:
+                pdf.cell(0, 8, f"Monthly Surplus Allocation: Rs. {iv['monthly_surplus_allocation']:,}", 0, 1)
+            if "recommendations" in iv:
+                pdf.set_font("Arial", 'B', 12)
+                pdf.cell(0, 8, 'Recommended Instruments:', 0, 1)
+                pdf.set_font("Arial", '', 12)
+                for rec in iv["recommendations"]:
+                    instrument = rec.get('instrument', '')
+                    alloc = rec.get('allocation_percentage', 0)
+                    rationale = rec.get('rationale', '')
+                    # encode characters to avoid FPDF error
+                    instrument = instrument.encode('latin-1', 'replace').decode('latin-1')
+                    rationale = rationale.encode('latin-1', 'replace').decode('latin-1')
+                    pdf.multi_cell(0, 8, f"- {instrument} ({alloc}%): {rationale}")
+            pdf.ln(5)
+
+    buffer = io.BytesIO()
+    pdf_output = pdf.output(dest='S').encode('latin-1')
+    buffer.write(pdf_output)
+    buffer.seek(0)
+    return buffer
+
 def main():
     st.set_page_config(
         page_title="FinGuide",
@@ -837,14 +931,28 @@ def main():
                     
                     try:
                         docx_file = generate_docx_report(results)
-                        st.download_button(
-                            label="📥 Download Full Report (.docx)",
-                            data=docx_file,
-                            file_name="FinGuide_Report.docx",
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        )
-                    except Exception as docx_error:
-                        st.warning(f"Could not generate DOCX report: {docx_error}")
+                        pdf_file = generate_pdf_report(results)
+                        
+                        st.markdown("### 📥 Download Options")
+                        doc_col, pdf_col = st.columns(2)
+                        with doc_col:
+                            st.download_button(
+                                label="Download Report (.docx)",
+                                data=docx_file,
+                                file_name="FinGuide_Report.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                use_container_width=True
+                            )
+                        with pdf_col:
+                            st.download_button(
+                                label="Download Report (.pdf)",
+                                data=pdf_file,
+                                file_name="FinGuide_Report.pdf",
+                                mime="application/pdf",
+                                use_container_width=True
+                            )
+                    except Exception as report_error:
+                        st.warning(f"Could not generate reports: {report_error}")
 
                     
                     tabs = st.tabs(["💰 Budget Analysis", "📈 Savings Strategy", "💳 Debt Reduction", "📊 Investment Strategy"])
